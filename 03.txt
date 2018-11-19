@@ -1,4 +1,4 @@
-11. 
+﻿11. 
 
 GET /orders/1004?apikey=xasjkdfvssdsdsgrbbrhyj
 
@@ -34,125 +34,6 @@ GET /orders/1004?apikey=xasjkdfvssdsdsgrbbrhyj
 </dependency>
 
 
-25.
-
-** Result.java **
-@XmlRootElement(name="result")
-@XmlAccessorType(XmlAccessType.FIELD)
-public class Result {
-	private String status;
-	private String message;
-	private String key;
-
-	//생성자2개, setter, getter 메서드 작성
-	//toString() 메서드 오버라이딩	
-}
-
-
-26.
-
-** Contact.java **
-@XmlRootElement(name="contact")
-@XmlAccessorType(XmlAccessType.FIELD)
-public class Contact {
-	@XmlAttribute
-	private int no;
-	private String name;
-	private String tel;
-	private String address;
-
-	//생성자2개, setter, getter 메서드 작성
-	//toString() 메서드 오버라이딩
-}
-
-
-27.
-
-** ContactList.java **
-package com.multi.contactsapp.domain;
-......
-@XmlRootElement(name="contactList")
-@XmlAccessorType(XmlAccessType.FIELD)
-public class ContactList {
-	private int pageNo;
-	private int pageSize;
-	private int totalCount;
-	@XmlElement(name="contact")
-	private List<Contact> contacts;
-	
-	//생성자2개, setter, getter 메서드 작성
-	//toString() 메서드 오버라이딩
-}
-
-
-
-28.
-
-** ContactService.java **
-@Service
-public class ContactService {
-  @Autowired
-  private ContactDAO contactDAO;
-  
-  public ContactList getContactList() {
-    List<Contact> contacts = contactDAO.getContactList();
-    ContactList contactList = new ContactList(0, 0, contacts.size(), contacts);
-    return contactList;
-  }
-  
-  public ContactList getContactList(int pageNo, int pageSize) {
-    List<Contact> contacts = contactDAO.getContactList(pageNo, pageSize);
-    int totalCount = contactDAO.getContactCount();    
-    ContactList contactList = new ContactList(pageNo, pageSize, totalCount, contacts);
-    return contactList;  
-  }
-  
-  public Contact getContactOne(Contact c) {
-    return contactDAO.getContactOne(c);
-  }
-  
-  public Result insertContact(Contact c) {
-    Result result = new Result("ok", "", "");
-    try {
-      int no = contactDAO.insertContact(c);
-      result.setMessage("연락처 추가 성공. 추가된 연락처의 일련번호 :" + no);
-      result.setKey(""+no);
-    } catch (Exception ex) {
-      result.setStatus("fail");
-      result.setMessage(ex.getMessage());
-      result.setKey("");
-    }
-    return result;
-  }
-  
-  public Result updateContact(Contact c) {
-    Result result = new Result("ok", "", "");
-    try {
-      int count = contactDAO.updateContact(c);
-      result.setMessage(count + "건의 연락처 변경 성공");
-      result.setKey(c.getNo()+"");
-    } catch (Exception ex) {
-      result.setStatus("fail");
-      result.setMessage(ex.getMessage());
-      result.setKey("");
-    }
-    return result;
-  }
-  
-  public Result deleteContact(Contact c) {
-    Result result = new Result("ok", "", "");
-    try {
-      int count = contactDAO.deleteContact(c);
-      result.setMessage(count + "건의 연락처 삭제 성공");
-      result.setKey(c.getNo()+"");
-    } catch (Exception ex) {
-      result.setStatus("fail");
-      result.setMessage(ex.getMessage());
-      result.setKey("");
-    }
-    return result;
-  }
-}
 
 
 32.
@@ -177,75 +58,6 @@ public class ContactService {
 <beans:bean id="jsonView" 
     class="org.springframework.web.servlet.view.json.MappingJackson2JsonView">
 </beans:bean>
-
-
-34.
-
-** ContactRestController.java **
-@Controller
-@RequestMapping(value="/contacts")
-public class ContactRestController {
-  
-  @Autowired
-  private ContactService contactService;
-  
-  @Resource(name="xmlView")
-  private View xmlView;
-  
-  @Resource(name="jsonView")
-  private View jsonView;
-
-  @RequestMapping(method=RequestMethod.GET)
-  public ModelAndView getContactList(
-      @RequestParam(value="pageno", required=false, defaultValue="0") int pageNo, 
-      @RequestParam(value="pagesize", required=false, defaultValue="3")int pageSize) {
-    ContactList contactList = null;
-    if (pageNo == 0) {
-      contactList = contactService.getContactList();
-    } else {
-      contactList = contactService.getContactList(pageNo, pageSize);
-    }
-    ModelAndView mav = new ModelAndView();
-    mav.addObject("data", contactList);
-    mav.setView(jsonView);
-    return mav;
-  }
-
-  @RequestMapping(value="{no}", method=RequestMethod.GET)
-  public ModelAndView getContactOne(@PathVariable("no") int no) {
-    Contact c = new Contact();
-    c.setNo(no);
-    ModelAndView mav = new ModelAndView();
-    mav.addObject("data", contactService.getContactOne(c));
-    mav.setView(jsonView);
-    return mav;
-  }
-
- @RequestMapping(method=RequestMethod.POST)
-  public ModelAndView insertContact(@RequestBody Contact c) {
-    ModelAndView mav = new ModelAndView();
-    mav.addObject("data", contactService.insertContact(c));
-    mav.setView(jsonView);
-    return mav;
-  }
-  @RequestMapping(value="{no}", method=RequestMethod.PUT)
-  public ModelAndView updateContact(@RequestBody Contact c, @PathVariable("no") int no) {
-    c.setNo(no);
-    ModelAndView mav = new ModelAndView();
-    mav.addObject("data", contactService.updateContact(c));
-    mav.setView(jsonView);
-    return mav;
-  }  
-  @RequestMapping(value="{no}", method=RequestMethod.DELETE)
-  public ModelAndView deleteContact(@PathVariable("no") int no) {
-    Contact c = new Contact();
-    c.setNo(no);
-    ModelAndView mav = new ModelAndView();
-    mav.addObject("data", contactService.deleteContact(c));
-    mav.setView(jsonView);
-    return mav;
-  }
-}
 
 
 42.
@@ -303,54 +115,6 @@ public class ContactRestController {
 
 
 
-47.
-
-package com.multi.contactsapp;
-......
-
-@Controller
-@RequestMapping(value="/contacts")
-public class ContactRestController {
-	
-	@Autowired
-	private ContactService contactService;
-
-	@RequestMapping(method=RequestMethod.GET)
-	public ModelAndView getContactList() {
-		ModelAndView mav = new ModelAndView();
-		mav.addObject("data", contactService.getContactList());
-		mav.setViewName("contact");
-		return mav;
-	}
-
-}
-
-
-55.
-
-package com.multi.contactsapp;
-......
-
-@RestController
-@RequestMapping(value="contacts")
-public class ContactRestController {
-  
-  @Autowired
-  private ContactService contactService;
-  
-  @RequestMapping(method = RequestMethod.GET)
-  public ContactList getContactList() {
-    return contactService.getContactList();
-  }
-
-  @RequestMapping(method = RequestMethod.POST)
-  public Result insertContact(@RequestBody Contact c) {
-    return contactService.insertContact(c);
-  }
-}
-
-
-
 57.
 
 <?xml version="1.0" encoding="UTF-8"?>
@@ -391,43 +155,6 @@ spring.jpa.hibernate.ddl-auto=none
 
 
 
-65.
-
-package com.multi.contactsapp.domain;
-.......
-
-@Entity
-@SequenceGenerator(name="CONTACT_SEQ_GENERATOR", 
-  sequenceName="CONTACT_SEQ", initialValue=1, allocationSize=1)
-public class Contact {
-  @Id
-  @GeneratedValue(strategy=GenerationType. SEQUENCE, generator="CONTACT_SEQ_GENERATOR")
-  private int no;
-  private String name;
-  private String tel;
-  private String address;
-  
-  //생성자, Setter, Getter 코드 자동 생성
-}
-
-
-
-66.
-
-package com.multi.contactsapp.dao;
-
-import org.springframework.data.repository.PagingAndSortingRepository;
-import org.springframework.data.rest.core.annotation.RepositoryRestResource;
-
-import com.multi.contactsapp.domain.Contact;
-
-@RepositoryRestResource
-public interface ContactRepository 
-     extends  PagingAndSortingRepository<Contact, Integer> {
-
-}
-
-
 
 73.
 
@@ -458,68 +185,6 @@ spring.http.encoding.force-response=true
        <typeAlias type="com.multi.contactsapp.domain.Contact" alias="Contact"/>
    </typeAliases> 
 </configuration>
-
-
-
-76.
-
-package com.multi.contactsapp;
-......
-
-@RestController
-@RequestMapping(value="/contacts")
-public class ContactRestController {
-  
-  @Autowired
-  private ContactService contactService;
-
-  @RequestMapping(method=RequestMethod.GET)
-  public ContactList getContactList() {
-    return contactService.getContactList();
-  }
-
-  @RequestMapping(method = RequestMethod.POST)
-  public Result insertContact(@RequestBody Contact c) {
-    return contactService.insertContact(c);
-  } 
-}
-
-
-
-78.
-
-@Configuration
-@EnableWebMvc
-public class WebMvcConfig extends WebMvcConfigurerAdapter {
-
-  @Override
-  public void configureContentNegotiation(ContentNegotiationConfigurer configurer) {
-    configurer
-      .favorPathExtension(true).favorParameter(true)
-      .ignoreAcceptHeader(true).parameterName("output")
-      .useJaf(false).defaultContentType(MediaType.APPLICATION_JSON);
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
