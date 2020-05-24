@@ -1,150 +1,480 @@
+** 404 page
 
-3.
+package com.opensg.oauth2.client;
 
-<dependency>
-  <groupId>io.springfox</groupId>
-  <artifactId>springfox-swagger2</artifactId>
-  <version>2.8.0</version>
-</dependency>
-<dependency>
-  <groupId>io.springfox</groupId>
-  <artifactId>springfox-swagger-ui</artifactId>
-  <version>2.8.0</version>
-</dependency>
-<dependency>
-  <groupId>org.codehaus.woodstox</groupId>
-  <artifactId>woodstox-core-asl</artifactId>
-  <version>4.4.1</version>
-</dependency>
-
-
-
-4.
-
-package com.multi.contactsapp;
-......
-@Configuration
-@EnableSwagger2
-public class SwaggerConfig {                                    
-    @Bean
-    public Docket api() { 
-        return new Docket(DocumentationType.SWAGGER_2)  
-          .select()                                  
-          .apis(RequestHandlerSelectors.any())              
-          .paths(PathSelectors.any())                          
-          .build()
-          .apiInfo(apiInfo());                                           
-    }
-
-   private ApiInfo apiInfo() {
-        return new ApiInfo(
-          "연락처 서비스 ", 
-          "RESTful Service 학습을 위해 만든 서비스 API 입니다.", 
-          "v1.0", 
-          "Terms of service", 
-          new Contact("원형섭", "http://opensg.net", "stepanowon@opensg.net"), 
-          "MIT License", "http://opensg.net/license.html", Collections.emptyList());
-   }
+public class Settings {
+  public static final String CLIENT_ID = 
+             "[발급받은 client_id]";
+  public static final String CLIENT_SECRET = 
+             "[발급받은 client_secret]";
+  public static final String AUTHORIZE_URL=
+             "https://bitly.com/oauth/authorize";
+  public static final String ACCES_TOKEN_URL = 
+             "https://api-ssl.bitly.com/oauth/access_token";
+  public static final String REDIRECT_URI = 
+             "http://jcornor.com:8080/bitlyclient/callback.jsp";
+  public static final String SHORTEN_API_URL = 
+             "https://api-ssl.bitly.com/v4/shorten";
 }
 
 
 
-<beans:bean class="com.multi.contactsapp.SwaggerConfig"/> 
+** 405 page
 
-
-6.
-
-@Configuration
-@EnableWebMvc
-public class WebConfig extends WebMvcConfigurerAdapter {
-    ......(생략)
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("swagger-ui.html")
-                .addResourceLocations("classpath:/META-INF/resources/");
-
-        registry.addResourceHandler("/webjars/**")
-                .addResourceLocations("classpath:/META-INF/resources/webjars/");
-    }
-}
-
-
-
-7.
-
-<resources mapping="swagger-ui.html" 
-     location="classpath:/META-INF/resources/" />
-<resources mapping="/webjars/**" 
-     location="classpath:/META-INF/resources/webjars/" />
-
-
-
-8.
-
-@RestController
-@RequestMapping(value="contacts")
-@Api(value="ContactList Service Controller, 연락처 RESTful 서비스")
-public class ContactRestController {
-   @Autowired
-   private ContactService contactService;
-   ......
-   @ApiOperation(value="연락처 수정", notes="기존 연락처를 수정합니다. .... ")
-   @RequestMapping(value="{no}", method = RequestMethod.PUT)
-   public Result updateContact(
-      @ApiParam(value="연락처의 일련번호") @PathVariable("no") int no, 
-      @ApiParam(value="수정할 연락처 정보") @RequestBody Contact contact) {
-      contact.setNo(no);
-      return contactService.updateContact(contact);
-   }   
-   ......
-}
+<%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
+<%@ page import="com.opensg.oauth2.client.*" %>
+<%@ page import="java.util.*" %>
+<%
+  HashMap<String,String> map = new HashMap<String, String>();
+  map.put("client_id", Settings.CLIENT_ID);
+  map.put("redirect_uri", Settings.REDIRECT_URI);
+  map.put("response_type", "code");
+  String url = Settings.AUTHORIZE_URL + "?" + 
+      OAuth2ClientUtil.getParamStringFromMap(map);
+%> 
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-KR">
+<title>bitly Oauth 2.0 client Test</title>
+</head>
+<body>
+  <a href="<%=url%>">bitly 앱 승인 페이지로 이동</a>
+  <br /><br /><br />
+  <p>반드시 http://jcornor.com:8080/bitlyclient 로 실행하세요.</p>
+</body>
+</html>
 
 
 
-9.
 
-@ApiOperation(value="연락처 목록 조회", notes="연락처 목록 조회용 리소스입니다. ....(생략)")
-@ApiImplicitParams({
-    @ApiImplicitParam(name="pageno",value="페이지 번호",dataType="string",paramType="query",defaultValue="0"), 
-    @ApiImplicitParam(name="pagesize",value="페이지 사이즈",dataType="string",paramType="query",defaultValue="4") 
-})
-@RequestMapping(method = RequestMethod.GET)
-public ContactList getContactList(
-    @RequestParam(value="pageno", required=false, defaultValue="0") int pageNo, 
-    @RequestParam(value="pagesize", required=false, defaultValue="4")int pageSize) {
-  if (pageNo==0) {
-    return contactService.getContactList();
+** 407 page
+
+<%@ page language="java" contentType="text/html; charset=utf-8"
+    pageEncoding="utf-8"%>
+<%@ page import="com.opensg.oauth2.client.*" %>
+<%@ page import="java.util.*" %>
+<%@ page import="org.apache.commons.httpclient.*" %>
+<%@ page import="org.apache.commons.httpclient.methods.*"%>
+<%
+  String queryString = request.getQueryString();
+  HashMap<String,String> map = OAuth2ClientUtil.getMapFromParamString(queryString);
+  //code는 이전 행에서 이미 획득 : callback.jsp?code=xxxxxx
+  String url = Settings.ACCES_TOKEN_URL;
+  HttpClient client = new HttpClient();
+  client.getParams().setContentCharset("utf-8");
+  PostMethod method = new PostMethod(url);
+  method.addParameter("client_id", Settings.CLIENT_ID);
+  method.addParameter("client_secret", Settings.CLIENT_SECRET);
+  method.addParameter("redirect_uri", Settings.REDIRECT_URI);
+  method.addParameter("grant_type", "authorization_code");
+  method.addParameter("code", map.get("code"));
+
+  int status = client.executeMethod(method);
+  String result= "";
+  String body="";
+  if (status == 200) {
+    body = method.getResponseBodyAsString();
+    HashMap<String,String> tokenMap = OAuth2ClientUtil.getMapFromParamString(body);
+    session.setAttribute("access_token", tokenMap.get("access_token"));
+    response.sendRedirect("main.jsp");
   } else {
-    return contactService.getContactList(pageNo, pageSize);
+    result = "인증 실패!!";
+  }
+%>
+<%=result %>
+
+
+
+
+** 409 page
+
+<%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
+<% if (session.getAttribute("access_token") == null) { 
+  response.sendRedirect("index.jsp");   
+}  %>
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-KR">
+<link rel="stylesheet" type="text/css" href="http://fonts.googleapis.com/css?family=Quicksand" />
+<link rel="stylesheet" type="text/css" href="css/pretty-json.css" />
+<title>URL 단축 테스트</title>
+</head>
+<body>
+  긴 URL : <input type="text" id="long" value="" /><br />
+  <button id="shorten">URL 짧게!!</button>
+  <hr />
+  짧은 URL : <span id="short"></span><br />
+  수신 데이터 : <br />
+ <div style="border: solid 1px gray;" id="json">
+  </div>
+    <script type="text/javascript" src="js/jquery.min.js" ></script>
+    <script type="text/javascript" src="js/underscore-min.js" ></script>
+    <script type="text/javascript" src="js/backbone-min.js" ></script>
+    <script type="text/javascript" src="js/pretty-json-min.js" ></script>
+  <script type="text/javascript">
+  var param = { longUrl : ""  };
+  $("#shorten").click(function() {
+    param.long_url = $("#long").val();
+    $.get("shorten.jsp", param, function(response) {
+       var node = new PrettyJSON.view.Node({ 
+          el:$("#json"), 
+          data: response
+       });
+       console.log(response);
+       $("#short").html(response.link);
+    });    
+  })
+  </script>
+</body>
+</html>
+
+
+
+** 411 page
+
+<%@ page language="java" contentType="application/json; charset=utf-8"
+    pageEncoding="utf-8"%>
+<%@ page import="com.opensg.oauth2.client.*" %>
+<%@ page import="java.util.*" %>
+<%@ page import="org.apache.commons.httpclient.*" %>
+<%@ page import="org.apache.commons.httpclient.methods.*"%>
+<%
+  if (session.getAttribute("access_token") == null) {
+    throw new Exception("access_token is null!!");  
+  }
+
+  String access_token = (String)session.getAttribute("access_token");
+  
+  String jsonRequest = "{ \"long_url\" : \""+ request.getParameter("long_url") + "\" } ";
+    StringRequestEntity requestEntity = 
+            new StringRequestEntity(jsonRequest, "application/json", "UTF-8");
+      
+  String bearerToken = OAuth2ClientUtil.generateBearerTokenHeaderString(access_token);
+ String endpoint = Settings.SHORTEN_API_URL;
+  HttpClient client = new HttpClient();
+  client.getParams().setContentCharset("utf-8");
+  
+  PostMethod method = new PostMethod(endpoint);
+    method.setRequestEntity(requestEntity);
+  method.setRequestHeader("Authorization", bearerToken);
+  method.setRequestHeader("Content-type", "application/json");
+  method.setRequestHeader("Accept", "application/json");
+  
+  int status = client.executeMethod(method);
+  String result= "";
+  if (status >= 200 || status < 300) {
+    result = method.getResponseBodyAsString();
+  } else {
+    result = "{ \"status\" : \"오류 발생 : " + status + "\" }";
+  }  
+%>
+<%=result %>
+
+
+
+** 419 page
+
+#data source settings
+spring.datasource.url=jdbc:h2:tcp://localhost/~/test
+spring.datasource.username=sa
+spring.datasource.password=
+spring.datasource.driver-class-name=org.h2.Driver
+
+#JPA settings
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+#server settings
+server.port=80
+
+
+
+** 420 page
+
+package com.multi.oauth20server.domain;
+......
+@Entity
+public class Contact {
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private long no;
+  private String name;
+  private String tel;
+  private String address;
+
+  ......
+  //생성자, getter, setter 생략
+}
+
+
+
+
+** 421 page
+
+package com.multi.oauth20server.dao;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import com.multi.oauth20server.domain.Contact;
+
+public interface ContactRepository extends JpaRepository<Contact, Long>{
+}
+
+
+
+** 422 page
+
+package com.multi.oauth20server;
+......
+@RestController
+@RequestMapping(value="/api")
+public class ContactRestController {  
+  @Autowired
+  ContactRepository contactRepository;
+
+  @GetMapping(value="/contacts", produces = {"application/json"})
+  public List<Contact> getContactList() {
+    return contactRepository.findAll();
+  }
+  
+  @GetMapping(value="/profiles", produces = {"application/json"})
+  public HashMap<String, String> getProfile() {
+    HashMap<String,String> profile = new HashMap<String, String>();
+    profile.put("system", "Test Auth Server");
+    profile.put("devenv", "Spring Boot 2.x");
+    return profile;
   }
 }
 
 
-10.
 
-** ContactList와 Contact 클래스에 대해서도 동일한 방법으로 작성함.
+** 424 page
 
-@ApiModel(value="연락처 한 건 객체")
-@XmlRootElement(name="contact")
-@XmlAccessorType(XmlAccessType.FIELD)
-public class Contact {
-  @ApiModelProperty(value="일련번호", example="1004")
-  @XmlAttribute
-  private int no;
-  @ApiModelProperty(value="이름", example="홍길동")
-  private String name;
-  @ApiModelProperty(value="전화번호", example="010-2222-3331")
-  private String tel;
-  @ApiModelProperty(value="주소", example="서울시")
-  private String address;
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.security.oauth.boot</groupId>
+	<artifactId>spring-security-oauth2-autoconfigure</artifactId>
+	<version>2.2.5.RELEASE</version>
+</dependency>
 
-  //생성자와 Setter, Getter 코드 자동 생성
+
+
+** 425 page
+
+@SpringBootApplication
+@Configuration
+public class Oauth2authserverApplication {
+  public static void main(String[] args) {
+    SpringApplication.run(Oauth2authserverApplication.class, args);
+  }
+  @Bean
+  public BCryptPasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+  }
 }
 
 
-12.
 
-http://localhost:8000/contactsvc4/swagger-ui.html
+** 426 page
+
+package com.multi.oauth20server;
+......
+@Configuration
+@EnableWebSecurity
+public class OAuth2SecurityConfig extends WebSecurityConfigurerAdapter {
+  @Autowired
+  BCryptPasswordEncoder passwordEncoder;
+
+  @Override
+  protected void configure(HttpSecurity http) throws Exception {
+    http.authorizeRequests()
+            .antMatchers("/oauth/**", "/oauth/token", "/login**").permitAll()
+            .anyRequest().authenticated();
+        http.formLogin();
+  }
+
+  @Override
+  protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+    auth.inMemoryAuthentication()
+      .withUser("root").password(passwordEncoder.encode("1234")).roles("admins", "users")
+      .and().withUser("user1").password(passwordEncoder.encode("1234")).roles("users")
+      .and().withUser("user2").password(passwordEncoder.encode("1234")).roles("users");
+  }
+}
+
+
+
+** 427 page
+
+package com.multi.oauth20server;
+......
+@Configuration
+@EnableAuthorizationServer
+public class OAuth2AuthServerConfig extends AuthorizationServerConfigurerAdapter {
+  @Autowired
+  DataSource dataSource;
+  @Autowired
+  BCryptPasswordEncoder passwordEncoder;
+
+  public TokenStore tokenStore() {
+    return new JdbcTokenStore(dataSource);
+  }
+
+  public ApprovalStore approvalStore() {
+    return new InMemoryApprovalStore();
+  }
+    
+  public AuthorizationCodeServices authorizationCodeServices() {
+    return new InMemoryAuthorizationCodeServices();
+  }
+
+  @Override
+  public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+    endpoints
+      .tokenStore(tokenStore())
+      .approvalStore(approvalStore())
+      .authorizationCodeServices(authorizationCodeServices());
+  }
+  @Override
+    public void configure(AuthorizationServerSecurityConfigurer oauthServer) throws Exception {
+        oauthServer.tokenKeyAccess("permitAll()")
+            .checkTokenAccess("isAuthenticated()")
+            .allowFormAuthenticationForClients();
+    }
+    @Override
+    public void configure(ClientDetailsServiceConfigurer clients) throws Exception {
+        clients.inMemory().withClient("client1").secret(passwordEncoder.encode("1234"))
+            .authorizedGrantTypes("authorization_code","implicit","password",
+                 "client_credentials", "refresh_token")
+            .scopes("contacts", "profiles", "messages").authorities("TEST_CLIENT")
+            .redirectUris("http://jcornor.com:8080/callback", "http://localhost:8080/callback")
+            .accessTokenValiditySeconds(3600)
+            .refreshTokenValiditySeconds(0);
+    }   
+}
+
+
+
+** 429 page
+
+package com.multi.oauth20server;
+......
+@EnableResourceServer
+@Configuration
+public class OAuth2ResourceServerConfig extends ResourceServerConfigurerAdapter {
+  @Autowired
+  DataSource dataSource;
+  
+  public TokenStore tokenStore() {
+    return new JdbcTokenStore(dataSource);
+  }
+  @Override
+  public void configure(HttpSecurity http) throws Exception { 
+      http.csrf().disable()
+         .requestMatchers()
+             .antMatchers("/api/**")
+         .and().authorizeRequests()
+             .antMatchers("/api/contacts").access("#oauth2.hasScope('contacts')")
+             .antMatchers("/api/profiles").access("#oauth2.hasScope('profiles')")
+         .and().exceptionHandling()
+             .accessDeniedHandler(new OAuth2AccessDeniedHandler());
+  } 
+}
+
+
+
+** 430 page
+
+http://tfactory.com/oauth/authorize?response_type=token&client_id=client1&scope=contacts%20messages&redirect_uri=http://jcornor.com:8080/callback
+
+
+
+** 433 page
+
+<dependency>	
+    <groupId>org.springframework.security</groupId>
+    <artifactId>spring-security-jwt</artifactId>
+    <version>1.1.0.RELEASE</version>
+</dependency>
+
+
+
+
+** 434 page
+
+package com.multi.oauth20server;
+......
+@Configuration
+@EnableAuthorizationServer
+public class OAuth2AuthServerConfig extends AuthorizationServerConfigurerAdapter {
+  ......
+  public JwtAccessTokenConverter accessTokenConverter() {
+    JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
+    converter.setSigningKey("SECRET KEY");
+    return converter;
+  }
+  public TokenStore tokenStore() {
+    return new JwtTokenStore(accessTokenConverter());
+  }
+  ......
+  @Override
+  public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+    endpoints
+      .tokenStore(tokenStore()).accessTokenConverter(accessTokenConverter())
+      .approvalStore(approvalStore())
+      .authorizationCodeServices(authorizationCodeServices());
+  }
+  ......
+}
+
+
+
+
+** 435 page
+
+package com.multi.oauth20server;
+......
+@EnableResourceServer
+@Configuration
+public class OAuth2ResourceServerConfig extends ResourceServerConfigurerAdapter {
+  public TokenStore tokenStore() {
+    return new JwtTokenStore(accessTokenConverter());
+  }
+  @Bean
+  public JwtAccessTokenConverter accessTokenConverter() {
+    JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
+    converter.setSigningKey("SECRET KEY");
+    return converter;
+  }
+  @Bean
+  public DefaultTokenServices tokenServices() {
+    DefaultTokenServices defaultTokenServices = new DefaultTokenServices();
+    defaultTokenServices.setTokenStore(tokenStore());
+    return defaultTokenServices;
+  }
+  @Override
+  public void configure(ResourceServerSecurityConfigurer config) {
+    config.tokenServices(tokenServices());
+  }
+  ......
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,77 +1,339 @@
-31.
+** 333 page
 
-<%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<%@ page import="com.opensg.oauth2.client.*" %>
-<%@ page import="java.util.*" %>
+package com.multi.oauth10client;
+
+public class Setup {
+  
+  // Twitter!!!
+   public static final String CONSUMER_KEY =
+       "[발급 받은 Client ID 또는 Consumer Key]";
+   public static final String CONSUMER_SECRET =
+       "[발급 받은 Client Secret 또는 Consumer Secret]";
+   public static final String CALLBACK_URL =
+       "http://jcornor.com:8080/callback";
+   public static final String REQUEST_TOKEN_URL =
+       "https://api.twitter.com/oauth/request_token";
+   public static final String AUTHORIZE_URL =
+       "https://api.twitter.com/oauth/authorize";
+   public static final String ACCESS_TOKEN_URL =
+       "https://api.twitter.com/oauth/access_token";
+   public static final String RESOURCE_URL = 
+       "https://api.twitter.com/1.1/statuses/home_timeline.json";
+}
+
+
+** 335 page
+
+public class OAuth10RequestServlet extends HttpServletBean {
+  ......
+  @Override
+  protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    try {
+      RequestTokenVO vo = new RequestTokenVO();
+      vo.setMethod("GET");
+      vo.setRequestURL(Setup.REQUEST_TOKEN_URL);
+      vo.setConsumerKey(Setup.CONSUMER_KEY);
+      vo.setConsumerSecretKey(Setup.CONSUMER_SECRET);
+      vo.setCallbackURL(Setup.CALLBACK_URL);
+      vo.sign();
+      TokenSender sender = new TokenSender(TokenSender.TYPE_PARAM);
+      sender.sendHttpClient(vo);
+      String RT = vo.getRequestOauthToken();
+      String RTS = vo.getRequestOauthTokenSecret();
+      HttpSession session = req.getSession();
+      session.setAttribute("RT", RT);
+      session.setAttribute("RTS", RTS);
+      resp.sendRedirect(Setup.AUTHORIZE_URL + "?" + OAuthMsgConstants.OAUTH_TOKEN + "=" + RT);
+    } catch (Exception e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+}
+
+
+
+** 337 page
+
+public class OAuth10CallbackServlet extends HttpServletBean {
+  ......
+  @Override
+  protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    try {
+      HttpSession session = req.getSession();
+      String RT = (String) session.getAttribute("RT");
+      String RTS = (String) session.getAttribute("RTS");
+      AccessTokenVO vo = new AccessTokenVO(req.getQueryString());
+      vo.setMethod("GET");
+      vo.setRequestURL(Setup.ACCESS_TOKEN_URL);
+      vo.setConsumerKey(Setup.CONSUMER_KEY);
+      vo.setConsumerSecretKey(Setup.CONSUMER_SECRET);
+      vo.setRequestOauthToken(RT);
+      vo.setRequestOauthTokenSecret(RTS);
+      vo.sign();
+      
+      TokenSender sender = new TokenSender();
+      sender.sendHttpClient(vo);
+      session.setAttribute("AT", vo.getRequestOauthToken());
+      session.setAttribute("ATS", vo.getRequestOauthTokenSecret());
+      resp.sendRedirect("resource");
+    } catch (Exception e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+}
+
+
+
+
+** 338 page
+
+public class OAuth10ResourceServlet extends HttpServletBean {
+  ......
+  @Override
+  protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+    HttpSession session = req.getSession();
+    String AT = (String) session.getAttribute("AT");
+    String ATS = (String) session.getAttribute("ATS");
+    try {
+      ResourceTokenVO vo = new ResourceTokenVO();
+      vo.setMethod("GET");
+      vo.setRequestURL(Setup.RESOURCE_URL);
+      vo.setConsumerKey(Setup.CONSUMER_KEY);
+      vo.setConsumerSecretKey(Setup.CONSUMER_SECRET);
+      vo.setRequestOauthToken(AT);
+      vo.setRequestOauthTokenSecret(ATS);
+      vo.sign();
+
+      TokenSender sender = new TokenSender();
+      sender.sendHttpClient(vo);
+      String result = vo.getResult();
+      resp.setContentType("application/json");
+      resp.getWriter().print(result);
+    } catch (Exception e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+}
+
+
+
+
+** 346 page
+
+package com.multi.oauth10server.controller;
+......
+@Controller
+@RequestMapping(value = "/oauth/request_token")
+public class RequestTokenController {
+
+  @Autowired
+  private ConsumerService consumerService;
+
+  @Autowired
+  private RequestTokenService requestTokenService;
+
+  @GetMapping
+  public ModelAndView requestToken(HttpServletRequest request) throws Exception {
+    // 이곳에 코드를 작성합니다. 아래 코드는 삭제하시고 작성하세요.
+    ModelAndView mav = new ModelAndView();
+    // 1. QueryString 또는 Post 파라미터 파싱
+    RequestTokenParam param = new RequestTokenParam(request);
+    // 2. tbl_oauth_key 테이블에서 ConsumerSecret 정보 읽어옴.
+    ConsumerVO consumerVO = consumerService.selectByConsumerKey(param.getConsumerKey());
+    String consumerSecret = consumerVO.getConsumerSecret();
+
+
+    // 3. signature validation!! 유효하지 않으면 예외 발생!
+    param.validateRequestToken(consumerSecret);
+    // 4. 유효하다면 RequestToken 생성하여 tbl_request_token 테이블에 저장!!
+    RequestTokenVO tokenVO = new RequestTokenVO();
+    tokenVO.setConsumerKey(consumerVO.getConsumerKey());
+    tokenVO.setCallback(param.getCallback());
+    TokenGenerator.generateRequestToken(tokenVO);
+    System.out.println("## RTO : " + tokenVO);
+    requestTokenService.createRequestToken(tokenVO);
+
+    String oauth_callback_confirmed = "true";
+
+    StringBuilder builder = new StringBuilder();
+    builder.append("oauth_token=" + tokenVO.getRequestToken() + "&");
+    builder.append("oauth_token_secret=" + tokenVO.getRequestTokenSecret() + "&");
+    builder.append("oauth_callback_confirmed=" + oauth_callback_confirmed);
+
+    mav.addObject("message", builder.toString());
+    mav.setViewName("request_token");
+    
+    return mav;
+
+  }
+}
+
+
+
+** 348 page
+
+<%@ page language="java" contentType="text/plain; charset=utf-8"
+    pageEncoding="utf-8"%>
 <%
-	HashMap<String,String> map = new HashMap<String, String>();
-	map.put("client_id", Settings.CLIENT_ID);
-	map.put("redirect_uri", Settings.REDIRECT_URI);
-	map.put("response_type", "code");
-	String url = Settings.AUTHORIZE_URL + "?" + 
-		OAuth2ClientUtil.getParamStringFromMap(map);
-%> 
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=EUC-KR">
-<title>Insert title here</title>
-</head>
-<body>
-	<a href="<%=url%>">bitly 앱 승인 페이지로 이동</a>
-</body>
-</html>
+  String message = (String)request.getAttribute("message");
+  response.getWriter().println(message);
+%>
 
 
 
-33.
+** 351 page
+
+@Controller
+@RequestMapping(value = "/oauth/authorize")
+public class AuthorizeController {
+  @Autowired
+  private RequestTokenService requestTokenService;
+  @Autowired
+  private UsersService usersService;
+
+  @GetMapping
+  public ModelAndView authorizeGet(HttpServletRequest request) throws Exception {
+    ModelAndView mav = new ModelAndView();
+    String oauth_token = (String) request.getParameter("oauth_token");
+    if (oauth_token != null) {
+      // 1. oauth_token 값으로 tbl_request_token 조회하여 레코드가 존재하지 않으면 오류임.
+      RequestTokenVO requestTokenVO = requestTokenService.getRequestToken(oauth_token);
+      if (requestTokenVO != null) {
+        mav.setViewName("authorize");
+        mav.addObject("requestTokenVO", requestTokenVO);
+      } else {
+        throw new OAuthException("Invalid/Expired Token", "E002-2");
+      }
+    } else {
+      throw new OAuthException("missing token parameter", "E002-1");
+    }
+    return mav;
+  }
+
+  @PostMapping
+  public ModelAndView authorizePost(HttpSession session, HttpServletRequest request, HttpServletResponse response)
+      throws Exception {
+    // 1. QueryString 값 파싱
+    String allow_deny = request.getParameter("allow_deny");
+    String oauth_token = request.getParameter("oauth_token");
+    String userid = request.getParameter("userid");
+    String password = request.getParameter("password");
+    // 2. 임시 생성된 RequestToken 값 읽어오기(from tbl_request_token)
+    RequestTokenVO tokenVO = (RequestTokenVO) requestTokenService.getRequestToken(oauth_token);
+    ModelAndView mav = new ModelAndView();
+    if (tokenVO == null) {
+      throw new OAuthException("Invalid/Expired Token", "E002-2");
+    }
+    mav.addObject("requestTokenVO", tokenVO);
+    mav.setViewName("authorize");
+    if (allow_deny.equals("allow")) {
+      UsersVO usersVO = null;
+      if (!SessionUtil.isLoginned(session)) {
+        UsersVO inputVO = new UsersVO(userid, password, "", 0);
+        usersVO = usersService.selectUsers(inputVO);
+        if (usersVO != null) {
+          SessionUtil.loginUser(session, usersVO);
+        } else {
+          // 승인 버튼을 눌렀으나 사용자 계정 정보가 올바르지 않다면 다시 authorize 페이지로 이동
+          mav.addObject("loginResult", "false");
+          mav.setViewName("authorize");
+          return mav;
+        }
+      }
+      // RequestTokenTable의 UserNo 필드값을 애플리케이션의 접근을 허용한 사용자의 UserNo로 변경
+      tokenVO.setUserNo(SessionUtil.getUserInfo(session).getUserno());
+      requestTokenService.updateUserNo(tokenVO);
+
+      // 로그인된 상태에서 App을 승인하면 Callback URL로 이동
+      response.sendRedirect(tokenVO.getCallback() + "?oauth_token=" + tokenVO.getRequestToken()
+          + "&oauth_verifier=" + tokenVO.getVerifier());
+    } else {
+      // 승인거부를 하였다면 임시 생성한 RequestToken값을 삭제하고 승인거부 화면 출력
+      requestTokenService.deleteRequestToken(oauth_token);
+      mav.setViewName("authorize_error");
+      mav.addObject("errorMessage", "사용자가 애플리케이션의 접근을 허용하지 않습니다.");
+      SessionUtil.logoutUser(session);
+    }
+    return mav;
+
+  }
+}
+
+
+
+** 354 page
 
 <%@ page language="java" contentType="text/html; charset=utf-8"
     pageEncoding="utf-8"%>
-<%@ page import="com.opensg.oauth2.client.*" %>
-<%@ page import="java.util.*" %>
-<%@ page import="org.apache.commons.httpclient.*" %>
-<%@ page import="org.apache.commons.httpclient.methods.*"%>
+<%@ page import="com.multi.oauth10server.util.*" %>
+<%@ page import="com.multi.oauth10server.model.*" %>
 <%
-	String queryString = request.getQueryString();
-	HashMap<String,String> map = OAuth2ClientUtil.getMapFromParamString(queryString);
-	//code는 이전 행에서 이미 획득 : callback.jsp?code=xxxxxx
-	map.put("client_id", Settings.CLIENT_ID);
-	map.put("client_secret", Settings.CLIENT_KEY);
-	map.put("redirect_uri", Settings.REDIRECT_URI);
-	map.put("grant_type", "authorization_code");
-		String url = Settings.ACCES_TOKEN_URL;
-	HttpClient client = new HttpClient();
-	client.getParams().setContentCharset("utf-8");
-	PostMethod method = new PostMethod(url);
-	method.addParameter("client_id", map.get("client_id"));
-	method.addParameter("client_secret", map.get("client_secret"));
-	method.addParameter("redirect_uri", map.get("redirect_uri"));
-	method.addParameter("grant_type", map.get("grant_type"));
-	method.addParameter("code", map.get("code"));
-
-	int status = client.executeMethod(method);
-	String result= "";
-	String body="";
-	if (status == 200) {
-		body = method.getResponseBodyAsString();
-		HashMap<String,String> tokenMap = OAuth2ClientUtil.getMapFromParamString(body);
-		session.setAttribute("access_token", tokenMap.get("access_token"));
-		response.sendRedirect("main.jsp");
-	} else {
-		result = "인증 실패!!";
-	}
+  RequestTokenVO vo = (RequestTokenVO)request.getAttribute("requestTokenVO");
+  String loginResult = (String)request.getAttribute("loginResult");
 %>
-<%=result %>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-KR">
+<title>SimpleProvide</title>
+</head>
+<script type="text/javascript">
+function goAllow() {
+  document.getElementById("f1").submit();
+}
+function goDeny() {
+  //승인거부를 누르면 Provider에서 발급했던 Request token 정보를 삭제한다.
+  //이 예제에서는 tbl_request_toke테이블에서..삭제!
+  document.getElementById("allow_deny").value="deny";
+  document.getElementById("f1").submit();
+}
+</script>
+<body>
+<h2>Simple Provider Authorization!!</h2>
+<hr>
+<% if (loginResult != null && loginResult.equals("false")) { %>
+  <div style="font-color: blue; font-size:13pt;">
+    <b>로그인 실패!!! : 정확한 ID와 암호를 입력하십시오.</b>
+  </div>
+<% } %>  
+  <div>
+    <div style="font-size:16pt;">'<%=vo.getAppName() %>'이 당신의 계정 정보에 접근하는 것을 허용하시겠습니까?</div>
+    <hr>
+    <form id="f1" method="post" action="authorize">
+      <input type="hidden" id="oauth_token" name="oauth_token" 
+        value="<%=vo.getRequestToken() %>" />
+      <input type="hidden" id="allow_deny" name="allow_deny" value="allow" /> 
+<%  if (!SessionUtil.isLoginned(session)) { %>
+      User ID : <input id="userid" name="userid" type="text" /><br/>
+      Password : <input id="password" name="password" type="password" 
+        value="" /><br/><br/>
+<% } else { %>
+<% UsersVO usersVO = SessionUtil.getUserInfo(session); %>      
+      <div><%=usersVO.getUserid() %>(<%=usersVO.getUsername() %>) 님 로그인 중!!</div>
+      <br/><br/>
+
+<% } %>
+          <input type="button" value="애플리케이션 승인"  id="allow" onclick="goAllow();">
+          <input type="button" value="승인 거부"  id="deny" onclick="goDeny();">    
+    </form>
+  </div>
+</body>
+</html>
 
 
 
-35.
+** 356 page
 
-<%@ page language="java" contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
-<% if (session.getAttribute("access_token") == null) { 
-	response.sendRedirect("index.jsp");	 
-}  %>
+<%@ page language="java" contentType="text/html; charset=utf-8"
+    pageEncoding="utf-8"%>
+<%@ page import="com.multi.oauth10server.model.*" %>    
+<%
+  String errorMessage = (String)request.getAttribute("errorMessage");
+  RequestTokenVO tokenVO = (RequestTokenVO)request.getAttribute("requestTokenVO");
+%>
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
@@ -79,373 +341,169 @@
 <title>Insert title here</title>
 </head>
 <body>
-	긴 URL : <input type="text" id="long" value="" /><br />
-	<button id="shorten">URL 짧게!!</button>
-	<hr />
-	짧은 URL : <span id="short"></span><br />
-	수신 데이터 : 
-	<pre id="json"></pre>
-	<script type="text/javascript" src="http://code.jquery.com/jquery.js"></script>
-	<script type="text/javascript">
-	var param = { longUrl : ""  };
-	$("#shorten").click(function() {
-		param.longUrl = $("#long").val();
-		$.get("shorten.jsp", param, function(response) {
-			$("#json").html(JSON.stringify(response));	
-			if (response.status_code == 200) {
-				$("#short").html(response.data.url);
-			} else {
-				$("#short").html("오류 발생 : " + response.status_txt)
-			}
-		});		
-	})
-	</script>
+  <h1>OAuth 접근 불허!!</h1>
+  <hr>
+  <%=errorMessage %>
+<% if (tokenVO != null) { %>
+  <br><br>
+  <a href="<%=tokenVO.getCallback() %>">'<%=tokenVO.getAppName() %>' 애플리케이션으로 이동합니다.</a>
+<% } %>
 </body>
 </html>
 
 
 
-37.
+** 359 page
 
-<%@ page language="java" contentType="application/json; charset=utf-8"
+package com.multi.oauth10server.controller;
+......
+@Controller
+@RequestMapping(value = "/oauth/access_token")
+public class AccessTokenController {
+  @Autowired
+  private RequestTokenService requestTokenService;
+  @Autowired
+  private UsersService usersService;
+  @Autowired
+  private ConsumerService consumerService;
+
+  @GetMapping
+  public ModelAndView getAccessToken(HttpServletRequest request) throws Exception {
+    // 1. 파라미터 파싱
+    AccessTokenParam param = new AccessTokenParam(request);
+    // 1.1 DB테이블에서 consumer, requestToken, User 정보 읽음(ConsumerSecret, Password,
+    // Verifier 정보 획득)
+    ConsumerVO consumerVO = consumerService.selectByConsumerKey(param.getConsumerKey());
+    RequestTokenVO requestTokenVO = requestTokenService.getRequestToken(param.getRequestToken());
+    UsersVO usersVO = usersService.selectUserByUserNo(requestTokenVO.getUserNo());
+    // 2. signature validation!! 유효하지 않으면 예외 발생!
+    param.validateRequestToken(requestTokenVO.getRequestTokenSecret(), requestTokenVO.getVerifier(),
+        consumerVO.getConsumerSecret());
+    // 2.1 유효하다면 RequestToken 테이블의 레코드 삭제 : 임시 TOken이므로..
+    requestTokenService.deleteRequestToken(requestTokenVO.getRequestToken());
+
+    // 3. AccessToken 생성
+    AccessTokenVO accessTokenVO = TokenGenerator.generateAccessToken(usersVO, consumerVO);
+
+    StringBuilder builder = new StringBuilder();
+    builder.append(OAuthMsgConstants.OAUTH_TOKEN + "=" + accessTokenVO.getAccessToken() + "&");
+    builder.append(OAuthMsgConstants.OAUTH_TOKEN_SECRET + "=" 
+         + accessTokenVO.getAccessTokenSecret() + "&");
+    builder.append("userno=" + accessTokenVO.getUserNo() + "&");
+    builder.append("userid=" + accessTokenVO.getUserID());
+
+    ModelAndView mav = new ModelAndView();
+    mav.setViewName("access_token");
+    mav.addObject("message", builder.toString());
+
+    return mav;
+  }
+}
+
+
+
+** 361 page
+
+<%@ page language="java" contentType="text/plain; charset=utf-8"
     pageEncoding="utf-8"%>
-<%@ page import="com.opensg.oauth2.client.*" %>
-<%@ page import="java.util.*" %>
-<%@ page import="org.apache.commons.httpclient.*" %>
-<%@ page import="org.apache.commons.httpclient.methods.*"%>
 <%
-	if (session.getAttribute("access_token") == null) {
-		throw new Exception("access_token is null!!");	
-	}
-	
-	String access_token = (String)session.getAttribute("access_token");
-	String longUrl = request.getParameter("longUrl");
-	HashMap<String,String> map = new HashMap<String,String>();
-	map.put("access_token", access_token);
-	map.put("longUrl", longUrl);
-	String param = OAuth2ClientUtil.getParamStringFromMap(map);
-	
-	String url = Settings.SHORTEN_URL_API_URL + "?" + param;
-	HttpClient client = new HttpClient();
-	client.getParams().setContentCharset("utf-8");
-	GetMethod method = new GetMethod(url);
-	
-	int status = client.executeMethod(method);
-	String result= "";
-	if (status == 200) {
-		result = method.getResponseBodyAsString();
-	} else {
-		result = "{ \"status\" : \"오류 발생 : " + status + "\" }";
-	}	
+  String message = (String)request.getAttribute("message");
+  response.getWriter().println(message);
 %>
-<%=result %>
-
-
-45.
-
-# datasource 
-spring.datasource.url=jdbc:h2:tcp://localhost/~/test
-spring.datasource.username=sa
-spring.datasource.password=
-spring.datasource.driver-class-name=org.h2.Driver
-
-spring.jpa.hibernate.ddl-auto=create
-
-#user credential
-security.user.name=user1
-security.user.password=1234
 
 
 
-46.
+** 363 page
 
-package com.multi.authserver;
-......
-@Entity
-public class Contact {
-	@Id
-	@GeneratedValue
-	private int no;
-	@Column(length=20, nullable=false)
-	private String name;
-	@Column(length=20, nullable=false)
-	private String tel;
-	@Column(length=300)
-	private String address;
-	
-	//생성자, Getter, Setter 자동 생성
+@RestController
+public class MyInfoController {
+
+  @GetMapping(value="/api/myinfo")
+  public UsersVO getMyInfo(HttpServletRequest request) throws Exception {
+    UsersVO usersVO = (UsersVO)request.getAttribute("usersVO");
+    ConsumerVO consumerVO = (ConsumerVO)request.getAttribute("consumerVO");
+    System.out.println(consumerVO);
+    return usersVO;
+  } 
 }
 
 
 
-47.
+** 364 page
 
-package com.multi.authserver;
-
-import org.springframework.data.repository.PagingAndSortingRepository;
-import org.springframework.data.rest.core.annotation.RepositoryRestResource;
-
-@RepositoryRestResource
-public interface ContactRepository 
-    extends PagingAndSortingRepository<Contact, Integer>{ }
-
-
-
-50.
-
-<dependency>
-	<groupId>org.springframework.security.oauth</groupId>
-	<artifactId>spring-security-oauth2</artifactId>
-</dependency> 
-
-
-#client credential
-security.oauth2.client.client-id=client1
-security.oauth2.client.client-secret=1234
-
-
-
-51.
-
-package com.multi.authserver;
+package com.multi.oauth10server.util;
 ......
-
-@EnableResourceServer
-@EnableAuthorizationServer
-@SpringBootApplication
-public class AuthserverApplication {
-
-	public static void main(String[] args) {
-		SpringApplication.run(AuthserverApplication.class, args);
-	}
-}
-
-
-
-52.
-
-http://localhost:8080/oauth/authorize?response_type=token&client_id=client1&redirect_uri=http://localhost:8080/client/callback&scope=profile
-
-http://localhost:8080/client/callback#access_token=f4db8444-a94d-416a-9947-ca4d11731e64&token_type=bearer&expires_in=43199
-
-
-
-54.
-
-http://localhost:8080/oauth/authorize?response_type=code&client_id=client1&redirect_uri=http://localhost:8080/client/callback&scope=profile
-
-
-56.
-
-curl -H "Authorization: Bearer f4db8444-a94d-416a-9947-ca4d11731e64" "http://localhost:8080/contacts"
-
-
-
-60.
-
-package com.multi.authserver;
-......(import 문 생략)
-@EnableAuthorizationServer
-@SpringBootApplication
-public class AuthserverApplication extends AuthorizationServerConfigurerAdapter {
-   @Autowired
-   DataSource dataSource; 
-   @Autowired
-   private AuthenticationManager authenticationManager;
-	
-   public TokenStore jdbcTokenStore() {
-      return new JdbcTokenStore(dataSource);
-   }
-   public ApprovalStore inmemoryApprovalStore() {
-      return new InMemoryApprovalStore();
-   }
-   public AuthorizationCodeServices inmemoryAuthorizationCodeServices() {
-      return new InMemoryAuthorizationCodeServices();
-   }
-   @Override
-   public void configure(ClientDetailsServiceConfigurer configurer) throws Exception {
-      configurer.inMemory()
-         .withClient("client1").secret("1234")
-         .authorizedGrantTypes("authorization_code", "implicit", 
-               "refresh_token", "password", "client_credentials" )
-         .scopes("profile", "read", "message")
-         .accessTokenValiditySeconds(3600).refreshTokenValiditySeconds(-1);
-   }
+@Component
+public class OAuthInterceptor  extends HandlerInterceptorAdapter  {
+  @Autowired
+  UsersService usersService;
+  @Autowired
+  ConsumerService consumerService;
+  @Override
+  public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+      throws Exception {
+        OAuthTokenParam param = new OAuthTokenParam(request);
     
-   @Override
-   public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
-       endpoints
-          .tokenStore(jdbcTokenStore())
-          .approvalStore(inmemoryApprovalStore())
-          .authorizationCodeServices(inmemoryAuthorizationCodeServices())
-          .authenticationManager(authenticationManager);
-   }
-	
-   public static void main(String[] args) {
-       SpringApplication.run(AuthserverApplication.class, args);
-   }
+        long userNo = param.getUserNo();
+        String consumerKey = param.getConsumerKey();
+        UsersVO usersVO = usersService.selectUserByUserNo(userNo);
+        ConsumerVO consumerVO = consumerService.selectByConsumerKey(consumerKey);  
+        
+        param.validateRequestToken(consumerVO, usersVO);
+    
+        request.setAttribute("usersVO", usersVO);
+        request.setAttribute("consumerVO", consumerVO);
+        
+        return true;
+  }
 }
 
 
 
-62.
+** 365 page
 
-package com.multi.authserver;
-......(import문 생략)
-@Configuration
-@EnableResourceServer
-public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
-
-    @Autowired
-    DataSource dataSource; 
-	
-    @Bean
-    public FilterRegistrationBean corsFilter() {
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-        config.addAllowedOrigin("*");
-        config.addAllowedHeader("*");
-        config.addAllowedMethod("*");
-        source.registerCorsConfiguration("/**", config);
-        FilterRegistrationBean bean = new FilterRegistrationBean(new CorsFilter(source));
-        bean.setOrder(0);
-        return bean;
-    }
-
-   public TokenStore jdbcTokenStore() {
-       return new JdbcTokenStore(dataSource);
-   }
-	
-   @Override
-    public void configure(HttpSecurity http) throws Exception {
-        http
-                .authorizeRequests()
-                .antMatchers("/").permitAll()
-                .antMatchers("/contacts/**").authenticated();
-    }
-
-   @Override
-   public void configure(ResourceServerSecurityConfigurer resources) throws Exception {
-      // TODO Auto-generated method stub
-      resources.tokenStore(jdbcTokenStore());
-   }
-}
-
-
-
-65.
-
-<dependency>
-    <groupId>org.springframework.security</groupId>
-    <artifactId>spring-security-jwt</artifactId>
-</dependency>
-
-
-
-
-66.
-
-......(생략)
-@EnableAuthorizationServer
-@SpringBootApplication
-public class AuthserverApplication extends AuthorizationServerConfigurerAdapter {
-	
-   @Autowired
-   private AuthenticationManager authenticationManager;
- 
-   @Autowired
-   DataSource dataSource; 
-
-   @Bean
-   public JwtAccessTokenConverter accessTokenConverter() {
-       JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
-       converter.setSigningKey("SECRET KEY");	
-       return converter;
-   }    
-   @Bean
-   public TokenStore tokenStore() {
-       return new JwtTokenStore(accessTokenConverter());
-   }
-
-    public ApprovalStore inmemoryApprovalStore() {
-        return new InMemoryApprovalStore();
-    }
-    public AuthorizationCodeServices inmemoryAuthorizationCodeServices() {
-        return new InMemoryAuthorizationCodeServices();
-    }
-    @Override
-    public void configure(ClientDetailsServiceConfigurer configurer) throws Exception {
-        configurer.inMemory().withClient("client1").secret("1234")
-            .authorizedGrantTypes("authorization_code", "implicit", 
-                "refresh_token", "password", "client_credentials" )
-            .scopes("profile", "read", "message")
-            .accessTokenValiditySeconds(3600).refreshTokenValiditySeconds(-1);
-    }
-    @Override
-    public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
-          endpoints.tokenStore(tokenStore()).accessTokenConverter(accessTokenConverter())
-              .approvalStore(inmemoryApprovalStore())
-              .authorizationCodeServices(inmemoryAuthorizationCodeServices())
-              .authenticationManager(authenticationManager);
-    }
-
-    public static void main(String[] args) {
-        SpringApplication.run(AuthserverApplication.class, args);
-    }
-}
-
-
-
-68.
+package com.multi.oauth10server;
+......
 
 @Configuration
-@EnableResourceServer
-public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
-	
-    @Bean
-    public TokenStore tokenStore() {
-        return new JwtTokenStore(accessTokenConverter());
-    }
-    @Bean
-    public JwtAccessTokenConverter accessTokenConverter() {
-        JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
-        converter.setSigningKey("SECRET KEY");
-        return converter;
-    }
-    @Bean
-    @Primary
-    public DefaultTokenServices tokenServices() {
-        DefaultTokenServices defaultTokenServices = new DefaultTokenServices();
-        defaultTokenServices.setTokenStore(tokenStore());
-        return defaultTokenServices;
-    }
-    @Bean
-    public FilterRegistrationBean corsFilter() {
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-        config.addAllowedOrigin("*");
-        config.addAllowedHeader("*");
-        config.addAllowedMethod("*");
-        source.registerCorsConfiguration("/**", config);
-        FilterRegistrationBean bean = new FilterRegistrationBean(new CorsFilter(source));
-        bean.setOrder(0);
-        return bean;
-    }
+public class WebMvcConfig implements WebMvcConfigurer {
+  @Autowired
+  OAuthInterceptor inteceptor; 
+  
     @Override
-    public void configure(ResourceServerSecurityConfigurer config) {
-        config.tokenServices(tokenServices());
-    }
-
-    @Override
-    public void configure(HttpSecurity http) throws Exception {
-        http
-                .authorizeRequests()
-                .antMatchers("/").permitAll()
-                .antMatchers("/contacts/**").authenticated();
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(inteceptor)
+                .addPathPatterns("/api/**");
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
