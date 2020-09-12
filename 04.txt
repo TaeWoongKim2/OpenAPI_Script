@@ -307,16 +307,16 @@ public interface EmployeeRepository  extends JpaRepository<Employee, String> {
 package com.multi.contactsapp;
 ......
 @RestController
-@RequestMapping(value="emps")
-public class EmployeeController {
-  @Autowired
-  private EmployeeRepository employeeRepository; 
-  
- @GetMapping("{deptid}") 
-  public Optional<Department> getDepartment(
-    @PathVariable("deptid") String deptid) {
-    return departmentRepository.findById(deptid);
-  }
+@RequestMapping(value="depts")
+public class DepartmentController {
+	@Autowired
+	private DepartmentRepository departmentRepository;
+	
+	@GetMapping("{deptid}") 
+	public Optional<Department> getDepartment(
+		@PathVariable("deptid") String deptid) {
+		return departmentRepository.findById(deptid);
+	}
 }
 
 
@@ -327,13 +327,12 @@ package com.multi.contactsapp;
 public class EmployeeController {
   @Autowired
   private EmployeeRepository employeeRepository; 
-  
- @GetMapping("req1/{name}") 
-  public List<Employee> getDepartment1(
-    @PathVariable("name") String name) {
-    return employeeRepository.
-         findByEmpNameStartingWith(name);  
-  } 
+	
+	@GetMapping("find1/{name}") 
+	public List<Employee> getDepartment1(
+		@PathVariable("name") String name) {
+		return employeeRepository.findByEmpNameStartingWith(name);  
+	}	
 }
 
 
