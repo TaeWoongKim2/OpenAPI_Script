@@ -138,6 +138,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   }
 }
 
+--------------------------------------------
+
+<<ApiErrorInfo.java>>
+package com.multi.contactsapp.util;
+......
+@JacksonXmlRootElement(localName="restApiError")
+public class ApiErrorInfo {
+  private String message;
+  private String status;
+  
+  //생성자와 Getter,Setter 생략
+}
+
+
+
 
 ** 300 page
 
